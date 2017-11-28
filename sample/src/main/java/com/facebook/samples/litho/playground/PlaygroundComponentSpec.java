@@ -18,19 +18,20 @@ import com.facebook.litho.ComponentContext;
 import com.facebook.litho.ComponentLayout;
 import com.facebook.litho.annotations.LayoutSpec;
 import com.facebook.litho.annotations.OnCreateLayout;
+import com.facebook.litho.annotations.Prop;
 import com.facebook.litho.widget.Text;
 
 @LayoutSpec
 public class PlaygroundComponentSpec {
 
   @OnCreateLayout
-  static ComponentLayout onCreateLayout(ComponentContext c) {
+  static ComponentLayout onCreateLayout(ComponentContext c, @Prop CharSequence text) {
     return Column.create(c)
         .backgroundColor(Color.WHITE)
         .child(
             Text.create(c)
                 .textSizeSp(20)
-                .text("Playground sample"))
+                .text(text))
         .build();
   }
 }
