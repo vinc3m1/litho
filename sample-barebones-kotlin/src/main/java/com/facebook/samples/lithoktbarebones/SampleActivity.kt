@@ -18,10 +18,7 @@ import android.os.Bundle
 import android.support.v7.widget.OrientationHelper
 import com.facebook.litho.ComponentContext
 import com.facebook.litho.LithoView
-import com.facebook.litho.widget.ComponentRenderInfo
-import com.facebook.litho.widget.LinearLayoutInfo
-import com.facebook.litho.widget.Recycler
-import com.facebook.litho.widget.RecyclerBinder
+import com.facebook.litho.widget.*
 
 class SampleActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,6 +44,7 @@ class SampleActivity : Activity() {
                     ComponentRenderInfo.create()
                             .component(
                                     ListItem.create(context)
+                                            .index(i)
                                             .color(if (i % 2 == 0) Color.WHITE else Color.LTGRAY)
                                             .title("Hello, world!")
                                             .subtitle("Litho tutorial")

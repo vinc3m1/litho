@@ -12,6 +12,7 @@
 
 package com.facebook.samples.lithoktbarebones
 
+import android.util.Log
 import com.facebook.yoga.YogaEdge.ALL
 
 import com.facebook.litho.Column
@@ -24,22 +25,27 @@ import com.facebook.litho.widget.Text
 
 @LayoutSpec
 object ListItemSpec {
-  
-  @OnCreateLayout
-  fun onCreateLayout(
-      c: ComponentContext,
-      @Prop color: Int,
-      @Prop title: String,
-      @Prop subtitle: String): Component = Column.create(c)
-        .paddingDip(ALL, 16f)
-        .backgroundColor(color)
-        .child(
-            Text.create(c)
-                .text(title)
-                .textSizeSp(40f))
-        .child(
-            Text.create(c)
-                .text(subtitle)
-                .textSizeSp(20f))
-        .build()
+
+    @OnCreateLayout
+    fun onCreateLayout(
+            c: ComponentContext,
+            @Prop index: Int,
+            @Prop color: Int,
+            @Prop title: String,
+            @Prop subtitle: String): Component {
+        Log.d("vmi", "index: " + index + " onCreateLayout on thread " + Thread.currentThread().name)
+        Thread.sleep(100)
+        return Column.create(c)
+                .paddingDip(ALL, 16f)
+                .backgroundColor(color)
+                .child(
+                        Text.create(c)
+                                .text(title)
+                                .textSizeSp(40f))
+                .child(
+                        Text.create(c)
+                                .text(subtitle)
+                                .textSizeSp(20f))
+                .build()
+    }
 }
