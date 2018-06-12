@@ -18,26 +18,26 @@ import android.os.Bundle
 import android.support.v7.widget.OrientationHelper
 import com.facebook.litho.ComponentContext
 import com.facebook.litho.LithoView
-import com.facebook.litho.widget.ComponentRenderInfo
-import com.facebook.litho.widget.LinearLayoutInfo
-import com.facebook.litho.widget.Recycler
-import com.facebook.litho.widget.RecyclerBinder
+import com.facebook.litho.widget.*
 
 class SampleActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val context = ComponentContext(this)
+        val lithoView = LithoView.create(context, EmptyComponent.create(context).build())
+        setContentView(lithoView)
 
-        val recyclerBinder = RecyclerBinder.Builder()
-                .layoutInfo(LinearLayoutInfo(this, OrientationHelper.VERTICAL, false))
-                .build(context)
+        lithoView.post {
+            val recyclerBinder = RecyclerBinder.Builder()
+                    .initRangeSize(10)
+//                    .rangeRatio(4f)
+                    .layoutInfo(LinearLayoutInfo(this, OrientationHelper.VERTICAL, false))
+                    .build(context)
 
-        val component = Recycler.create(context).binder(recyclerBinder).build()
-
-        addContent(recyclerBinder, context)
-
-        setContentView(LithoView.create(context, component))
+            lithoView.setComponentAsync(Recycler.create(context).binder(recyclerBinder).build())
+            addContent(recyclerBinder, context)
+        }
     }
 
     private fun addContent(recyclerBinder: RecyclerBinder, context: ComponentContext) {
@@ -47,6 +47,7 @@ class SampleActivity : Activity() {
                     ComponentRenderInfo.create()
                             .component(
                                     ListItem.create(context)
+                                            .index(i)
                                             .color(if (i % 2 == 0) Color.WHITE else Color.LTGRAY)
                                             .title("Hello, world!")
                                             .subtitle("Litho tutorial")
