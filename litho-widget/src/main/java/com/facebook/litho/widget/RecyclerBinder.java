@@ -2023,6 +2023,8 @@ public class RecyclerBinder
       int childrenHeightSpec,
       int scrollDirection) {
     ComponentsSystrace.beginSection("initRange");
+
+    Log.d("vmi", String.format("initRange w:%d h:%d on %s", width, height, Thread.currentThread().getName()));
     try {
       final int rangeSize;
       final int measuredSize;

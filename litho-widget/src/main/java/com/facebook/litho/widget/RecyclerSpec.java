@@ -25,6 +25,7 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ItemAnimator;
 import android.support.v7.widget.RecyclerView.OnScrollListener;
 import android.support.v7.widget.SnapHelper;
+import android.util.Log;
 import android.view.View;
 import com.facebook.litho.ComponentContext;
 import com.facebook.litho.ComponentLayout;
@@ -100,7 +101,9 @@ class RecyclerSpec {
       Size measureOutput,
       @Prop Binder<RecyclerView> binder,
       @Prop(optional = true) boolean canMeasure) {
-
+    Log.d("vmi", String.format("RecyclerSpec onMeasure w:%d h:%d",
+        View.MeasureSpec.getSize(widthSpec),
+        View.MeasureSpec.getSize(heightSpec)));
     binder.measure(
         measureOutput,
         widthSpec,
@@ -111,6 +114,7 @@ class RecyclerSpec {
   @OnBoundsDefined
   static void onBoundsDefined(
       ComponentContext context, ComponentLayout layout, @Prop Binder<RecyclerView> binder) {
+    Log.d("vmi", String.format("RecyclerSpec onBoundsDefined w:%d h:%d", layout.getWidth(), layout.getHeight()));
     binder.setSize(
         layout.getWidth(),
         layout.getHeight());
@@ -186,6 +190,8 @@ class RecyclerSpec {
       recyclerView.addItemDecoration(itemDecoration);
     }
 
+    Log.d("vmi", String.format("RecyclerSpec onMount w:%d h:%d",
+        recyclerView.getWidth(),recyclerView.getHeight()));
     binder.mount(recyclerView);
   }
 

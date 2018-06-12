@@ -1514,6 +1514,7 @@ public class ComponentTree {
           mLayoutThreadHandler.removeCallbacks(mCurrentCalculateLayoutRunnable);
         }
         mCurrentCalculateLayoutRunnable = new CalculateLayoutRunnable(source, treeProps);
+        // Log.d("vmi", "posting mCurrentCalculateLayoutRunnable");
         mLayoutThreadHandler.post(mCurrentCalculateLayoutRunnable);
       }
     } else {
