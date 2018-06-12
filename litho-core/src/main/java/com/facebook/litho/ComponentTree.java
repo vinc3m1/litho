@@ -199,13 +199,6 @@ public class ComponentTree {
   @Nullable
   private LayoutState mMainThreadLayoutState;
 
-  // The semantics here are tricky. Whenever you transfer mBackgroundLayoutState to a local that
-  // will be accessed outside of the lock, you must set mBackgroundLayoutState to null to ensure
-  // that the current thread alone has access to the LayoutState, which is single-threaded.
-  @GuardedBy("this")
-  @Nullable
-  private LayoutState mBackgroundLayoutState;
-
   @GuardedBy("this")
   private StateHandler mStateHandler;
 
@@ -313,72 +306,6 @@ public class ComponentTree {
     return mMainThreadLayoutState;
   }
 
-  @Nullable
-  @VisibleForTesting
-  @GuardedBy("this")
-  protected LayoutState getBackgroundLayoutState() {
-    return mBackgroundLayoutState;
-  }
-
-  /**
-   * Picks the best LayoutState and sets it in mMainThreadLayoutState. The return value is a
-   * LayoutState that must be released (after the lock is released). This awkward contract is
-   * necessary to ensure thread-safety.
-   */
-  @CheckReturnValue
-  @ReturnsOwnership
-  @ThreadConfined(ThreadConfined.UI)
-  @GuardedBy("this")
-  private LayoutState setBestMainThreadLayoutAndReturnOldLayout() {
-    assertHoldsLock(this);
-
-    final boolean isMainThreadLayoutBest = isBestMainThreadLayout();
-
-    if (isMainThreadLayoutBest) {
-      // We don't want to hold onto mBackgroundLayoutState since it's unlikely
-      // to ever be used again. We return mBackgroundLayoutState to indicate it
-      // should be released after exiting the lock.
-      final LayoutState toRelease = mBackgroundLayoutState;
-      mBackgroundLayoutState = null;
-      return toRelease;
-    } else {
-      // Since we are changing layout states we'll need to remount.
-      if (mLithoView != null) {
-        mLithoView.setMountStateDirty();
-      }
-
-      final LayoutState toRelease = mMainThreadLayoutState;
-      mMainThreadLayoutState = mBackgroundLayoutState;
-      mBackgroundLayoutState = null;
-
-      return toRelease;
-    }
-  }
-
-  @CheckReturnValue
-  @ReturnsOwnership
-  @ThreadConfined(ThreadConfined.UI)
-  @GuardedBy("this")
-  private boolean isBestMainThreadLayout() {
-    assertHoldsLock(this);
-
-    // If everything matches perfectly then we prefer mMainThreadLayoutState
-    // because that means we don't need to remount.
-    if (isCompatibleComponentAndSpec(mMainThreadLayoutState)) {
-      return true;
-    } else if (isCompatibleSpec(mBackgroundLayoutState, mWidthSpec, mHeightSpec)
-        || !isCompatibleSpec(mMainThreadLayoutState, mWidthSpec, mHeightSpec)) {
-      // If mMainThreadLayoutState isn't a perfect match, we'll prefer
-      // mBackgroundLayoutState since it will have the more recent create.
-      return false;
-    } else {
-      // If the main thread layout is still compatible size-wise, and the
-      // background one is not, then we'll do nothing. We want to keep the same
-      // main thread layout so that we don't force main thread re-layout.
-      return true;
-    }
-  }
-
   /** Whether this ComponentTree has been mounted at least once. */
   public boolean hasMounted() {
     return mHasMounted;
@@ -401,6 +328,7 @@ public class ComponentTree {
     }
   }
 
+  // FIXME(vmi) probably delete this
   private void backgroundLayoutStateUpdated() {
     assertMainThread();
 
@@ -411,7 +339,6 @@ public class ComponentTree {
       return;
     }
 
-    LayoutState toRelease;
     final boolean layoutStateUpdated;
     final int componentRootId;
     synchronized (this) {
@@ -421,14 +348,8 @@ public class ComponentTree {
       }
 
       final LayoutState oldMainThreadLayoutState = mMainThreadLayoutState;
-      toRelease = setBestMainThreadLayoutAndReturnOldLayout();
       layoutStateUpdated = (mMainThreadLayoutState != oldMainThreadLayoutState);
       componentRootId = mRoot.getId();
-    }
-
-    if (toRelease != null) {
-      toRelease.releaseRef();
-      toRelease = null;
     }
 
     if (!layoutStateUpdated) {
@@ -489,14 +410,10 @@ public class ComponentTree {
       mIncrementalMountHelper.onAttach(mLithoView);
     }
 
-    LayoutState toRelease;
     final int componentRootId;
     synchronized (this) {
       // We need to track that we are attached regardless...
       mIsAttached = true;
-
-      // ... and then we do state transfer
-      toRelease = setBestMainThreadLayoutAndReturnOldLayout();
 
       if (mRoot == null) {
         throw new IllegalStateException(
@@ -507,11 +424,6 @@ public class ComponentTree {
       }
 
       componentRootId = mRoot.getId();
-    }
-
-    if (toRelease != null) {
-      toRelease.releaseRef();
-      toRelease = null;
     }
 
     // We defer until measure if we don't yet have a width/height
@@ -685,8 +597,7 @@ public class ComponentTree {
    *     specs.
    */
   public synchronized boolean hasCompatibleLayout(int widthSpec, int heightSpec) {
-    return isCompatibleSpec(mMainThreadLayoutState, widthSpec, heightSpec)
-        || isCompatibleSpec(mBackgroundLayoutState, widthSpec, heightSpec);
+    return isCompatibleSpec(mMainThreadLayoutState, widthSpec, heightSpec);
   }
 
   void mountComponent(Rect currentVisibleArea, boolean processVisibilityOutputs) {
@@ -808,15 +719,12 @@ public class ComponentTree {
     assertMainThread();
 
     Component component = null;
-    LayoutState toRelease;
     synchronized (this) {
       mIsMeasuring = true;
 
       // This widthSpec/heightSpec is fixed until the view gets detached.
       mWidthSpec = widthSpec;
       mHeightSpec = heightSpec;
-
-      toRelease = setBestMainThreadLayoutAndReturnOldLayout();
 
       // We don't check if mRoot is compatible here since if it doesn't match mMainThreadLayout,
       // that means we're computing an async layout with a new root which can just be applied when
@@ -830,11 +738,6 @@ public class ComponentTree {
         // we need to copy it in order to use it concurrently.
         component = mRoot.makeShallowCopy();
       }
-    }
-
-    if (toRelease != null) {
-      toRelease.releaseRef();
-      toRelease = null;
     }
 
     if (component != null) {
@@ -970,8 +873,6 @@ public class ComponentTree {
     synchronized (this) {
       if (mMainThreadLayoutState != null) {
         toPrePopulate = mMainThreadLayoutState.acquireRef();
-      } else if (mBackgroundLayoutState != null) {
-        toPrePopulate = mBackgroundLayoutState.acquireRef();
       } else {
         return;
       }
@@ -1148,8 +1049,7 @@ public class ComponentTree {
       int firstFullyVisibleIndex,
       int lastFullyVisibleIndex) {
 
-    LayoutState layoutState =
-        isBestMainThreadLayout() ? mMainThreadLayoutState : mBackgroundLayoutState;
+    LayoutState layoutState = mMainThreadLayoutState;
 
     if (layoutState != null) {
       layoutState.checkWorkingRangeAndDispatch(
@@ -1166,8 +1066,7 @@ public class ComponentTree {
    * Dispatch OnExitedRange event to component which is still in the range, then clear the handler.
    */
   private synchronized void clearWorkingRangeStatusHandler() {
-    final LayoutState layoutState =
-        isBestMainThreadLayout() ? mMainThreadLayoutState : mBackgroundLayoutState;
+    final LayoutState layoutState = mMainThreadLayoutState;
 
     if (layoutState != null) {
       layoutState.dispatchOnExitRangeIfNeeded(mWorkingRangeStatusHandler);
@@ -1456,8 +1355,7 @@ public class ComponentTree {
       final boolean widthSpecDidntChange = !widthSpecInitialized || widthSpec == mWidthSpec;
       final boolean heightSpecDidntChange = !heightSpecInitialized || heightSpec == mHeightSpec;
       final boolean sizeSpecDidntChange = widthSpecDidntChange && heightSpecDidntChange;
-      final LayoutState mostRecentLayoutState =
-          mBackgroundLayoutState != null ? mBackgroundLayoutState : mMainThreadLayoutState;
+      final LayoutState mostRecentLayoutState = mMainThreadLayoutState;
       final boolean allSpecsWereInitialized =
           widthSpecInitialized &&
               heightSpecInitialized &&
@@ -1555,8 +1453,8 @@ public class ComponentTree {
       // Check if we already have a compatible layout.
       if (hasCompatibleComponentAndSpec()) {
         if (output != null) {
-          final LayoutState mostRecentLayoutState =
-              mBackgroundLayoutState != null ? mBackgroundLayoutState : mMainThreadLayoutState;
+          // FIXME(vmi) block here
+          final LayoutState mostRecentLayoutState = mMainThreadLayoutState;
           output.width = mostRecentLayoutState.getWidth();
           output.height = mostRecentLayoutState.getHeight();
         }
@@ -1582,6 +1480,7 @@ public class ComponentTree {
       layoutEvent.markerAnnotate(PARAM_TREE_DIFF_ENABLED, mIsLayoutDiffingEnabled);
     }
 
+    // FIXME(vmi) compute here
     LayoutState localLayoutState =
         calculateLayoutState(
             mLayoutLock,
@@ -1633,6 +1532,7 @@ public class ComponentTree {
 
         // Set the new layout state, and remember the old layout state so we
         // can release it.
+        // FIXME trigger update state?
         final LayoutState tmp = mBackgroundLayoutState;
         mBackgroundLayoutState = localLayoutState;
         localLayoutState = tmp;
@@ -1706,7 +1606,6 @@ public class ComponentTree {
     }
 
     LayoutState mainThreadLayoutState;
-    LayoutState backgroundLayoutState;
     synchronized (this) {
       sMainThreadHandler.removeMessages(MESSAGE_WHAT_BACKGROUND_LAYOUT_STATE_UPDATED, this);
 
@@ -1741,9 +1640,6 @@ public class ComponentTree {
       mainThreadLayoutState = mMainThreadLayoutState;
       mMainThreadLayoutState = null;
 
-      backgroundLayoutState = mBackgroundLayoutState;
-      mBackgroundLayoutState = null;
-
       // TODO t15532529
       mStateHandler = null;
 
@@ -1757,11 +1653,6 @@ public class ComponentTree {
     if (mainThreadLayoutState != null) {
       mainThreadLayoutState.releaseRef();
       mainThreadLayoutState = null;
-    }
-
-    if (backgroundLayoutState != null) {
-      backgroundLayoutState.releaseRef();
-      backgroundLayoutState = null;
     }
 
     synchronized (mEventTriggersContainer) {
@@ -1782,8 +1673,7 @@ public class ComponentTree {
   private boolean hasCompatibleComponentAndSpec() {
     assertHoldsLock(this);
 
-    return isCompatibleComponentAndSpec(mMainThreadLayoutState)
-        || isCompatibleComponentAndSpec(mBackgroundLayoutState);
+    return isCompatibleComponentAndSpec(mMainThreadLayoutState);
   }
 
   @GuardedBy("this")
