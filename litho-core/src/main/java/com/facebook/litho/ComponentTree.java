@@ -33,6 +33,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
+import android.os.Process;
 import android.support.annotation.IntDef;
 import android.support.annotation.Keep;
 import android.support.annotation.NonNull;
@@ -54,6 +55,11 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.CheckReturnValue;
 import javax.annotation.concurrent.GuardedBy;
@@ -168,6 +174,12 @@ public class ComponentTree {
 
   @GuardedBy("mCurrentCalculateLayoutRunnableLock")
   private @Nullable CalculateLayoutRunnable mCurrentCalculateLayoutRunnable;
+
+  private final Object mLayoutStateFutureLock = new Object();
+
+  @Nullable
+  @GuardedBy("mLayoutStateFutureLock")
+  private LayoutStateFuture mLayoutStateFuture;
 
   private volatile boolean mHasMounted;
 
@@ -864,10 +876,10 @@ public class ComponentTree {
               CalculateLayoutSource.MEASURE,
               null);
 
-      final StateHandler layoutStateStateHandler =
-          localLayoutState.consumeStateHandler();
-      final List<Component> components = new ArrayList<>(localLayoutState.getComponents());
+      final List<Component> components;
       synchronized (this) {
+        final StateHandler layoutStateStateHandler = localLayoutState.consumeStateHandler();
+        components = new ArrayList<>(localLayoutState.getComponents());
         if (layoutStateStateHandler != null) {
           mStateHandler.commit(layoutStateStateHandler);
         }
@@ -1531,7 +1543,7 @@ public class ComponentTree {
   private void calculateLayout(
       Size output,
       @CalculateLayoutSource int source,
-      String extraAttribution,
+      @Nullable String extraAttribution,
       @Nullable TreeProps treeProps) {
     final int widthSpec;
     final int heightSpec;
@@ -1724,6 +1736,12 @@ public class ComponentTree {
         }
       }
 
+      synchronized (mLayoutStateFutureLock) {
+        if (mLayoutStateFuture != null) {
+          mLayoutStateFuture = null;
+        }
+      }
+
       if (mPreAllocateMountContentHandler != null) {
         mPreAllocateMountContentHandler.removeCallbacks(mPreAllocateMountContentRunnable);
       }
@@ -1884,53 +1902,235 @@ public class ComponentTree {
       @Nullable DiffNode diffNode,
       @Nullable TreeProps treeProps,
       @CalculateLayoutSource int source,
-      String extraAttribution) {
-    final ComponentContext contextWithStateHandler;
+      @Nullable String extraAttribution) {
 
-    synchronized (this) {
-      final KeyHandler keyHandler =
-          (ComponentsConfiguration.useGlobalKeys || ComponentsConfiguration.isDebugModeEnabled)
-              ? new KeyHandler(mContext.getLogger())
-              : null;
+    LayoutStateFuture localLayoutStateFuture = new LayoutStateFuture(
+        lock,
+        context,
+        root,
+        widthSpec,
+        heightSpec,
+        diffingEnabled,
+        diffNode,
+        treeProps,
+        source,
+        extraAttribution
+    );
 
-      contextWithStateHandler =
-          new ComponentContext(
-              context, StateHandler.acquireNewInstance(mStateHandler), keyHandler, treeProps);
+    if (ComponentsConfiguration.enableSingleLayout) {
+      synchronized (mLayoutStateFutureLock) {
+        if (localLayoutStateFuture.equals(mLayoutStateFuture)) {
+          localLayoutStateFuture = mLayoutStateFuture;
+        } else {
+          mLayoutStateFuture = localLayoutStateFuture;
+        }
+      }
     }
 
-    if (lock != null) {
-      synchronized (lock) {
-        return LayoutState.calculate(
-            contextWithStateHandler,
-            root,
-            mId,
-            widthSpec,
-            heightSpec,
-            diffingEnabled,
-            diffNode,
-            mCanPrefetchDisplayLists,
-            mCanCacheDrawingDisplayLists,
-            mShouldClipChildren,
-            mPersistInternalNodeTree,
-            source,
-            extraAttribution);
+    try {
+      localLayoutStateFuture.run();
+      return localLayoutStateFuture.get();
+    } catch (ExecutionException e) {
+      final Throwable cause = e.getCause();
+      if (cause instanceof RuntimeException) {
+        throw (RuntimeException) cause;
+      } else {
+        throw new RuntimeException(e.getMessage(), e);
       }
-    } else {
+    } catch (InterruptedException | CancellationException e) {
+      throw new RuntimeException(e.getMessage(), e);
+    }
+  }
 
-      return LayoutState.calculate(
-          contextWithStateHandler,
-          root,
-          mId,
-          widthSpec,
-          heightSpec,
-          diffingEnabled,
-          diffNode,
-          mCanPrefetchDisplayLists,
-          mCanCacheDrawingDisplayLists,
-          mShouldClipChildren,
-          mPersistInternalNodeTree,
-          source,
-          extraAttribution);
+  private class LayoutStateFuture extends FutureTask<LayoutState> {
+
+    private static final int THREAD_PRIORITY_INVALID = Process.THREAD_PRIORITY_LOWEST +
+        Process.THREAD_PRIORITY_LESS_FAVORABLE * 100;
+
+    private final AtomicBoolean isFirstGet = new AtomicBoolean(true);
+    private final AtomicInteger runningThreadId = new AtomicInteger(-1);
+    private final ComponentContext context;
+    private final Component root;
+    private final int widthSpec;
+    private final int heightSpec;
+    private final boolean diffingEnabled;
+    @Nullable private final DiffNode diffNode;
+    @Nullable private final TreeProps treeProps;
+    @Nullable private final String extraAttribution;
+
+    private LayoutStateFuture(@Nullable final Object lock,
+        final ComponentContext context,
+        final Component root,
+        final int widthSpec,
+        final int heightSpec,
+        final boolean diffingEnabled,
+        @Nullable final DiffNode diffNode,
+        @Nullable final TreeProps treeProps,
+        @CalculateLayoutSource final int source,
+        @Nullable final String extraAttribution) {
+      super(new Callable<LayoutState>() {
+        @Override
+        public LayoutState call() throws Exception {
+
+          final ComponentContext contextWithStateHandler;
+
+          synchronized (ComponentTree.this) {
+            final KeyHandler keyHandler = (ComponentsConfiguration.useGlobalKeys
+                || ComponentsConfiguration.isDebugModeEnabled)
+                    ? new KeyHandler(context.getLogger())
+                    : null;
+
+            contextWithStateHandler =
+                new ComponentContext(
+                    context, StateHandler.acquireNewInstance(mStateHandler), keyHandler, treeProps);
+          }
+
+          if (lock != null) {
+            synchronized (lock) {
+              return LayoutState.calculate(
+                  contextWithStateHandler,
+                  root,
+                  mId,
+                  widthSpec,
+                  heightSpec,
+                  diffingEnabled,
+                  diffNode,
+                  mCanPrefetchDisplayLists,
+                  mCanCacheDrawingDisplayLists,
+                  mShouldClipChildren,
+                  mPersistInternalNodeTree,
+                  source,
+                  extraAttribution);
+            }
+          } else {
+
+            return LayoutState.calculate(
+                contextWithStateHandler,
+                root,
+                mId,
+                widthSpec,
+                heightSpec,
+                diffingEnabled,
+                diffNode,
+                mCanPrefetchDisplayLists,
+                mCanCacheDrawingDisplayLists,
+                mShouldClipChildren,
+                mPersistInternalNodeTree,
+                source,
+                extraAttribution);
+          }
+        }
+      });
+
+      this.context = context;
+      this.root = root;
+      this.widthSpec = widthSpec;
+      this.heightSpec = heightSpec;
+      this.diffingEnabled = diffingEnabled;
+      this.diffNode = diffNode;
+      this.treeProps = treeProps;
+      this.extraAttribution = extraAttribution;
+    }
+
+    @Override
+    public void run() {
+      if (runningThreadId.compareAndSet(-1, Process.myTid())) {
+        super.run();
+      }
+    }
+
+    @Override
+    public LayoutState get() throws InterruptedException, ExecutionException {
+      final int runningThreadId = this.runningThreadId.get();
+
+      final int originalThreadPriority;
+      if (isMainThread() && !isDone() && runningThreadId != Process.myTid()) {
+        // Main thread is about to be blocked, raise the running thread priority
+        originalThreadPriority = Process.getThreadPriority(runningThreadId);
+
+        boolean success = false;
+        int targetThreadPriority = Process.THREAD_PRIORITY_DISPLAY;
+        while (!success) {
+          try {
+            Process.setThreadPriority(runningThreadId, targetThreadPriority);
+            success = true;
+          } catch (SecurityException e) {
+            /*
+              From {@link Process#THREAD_PRIORITY_DISPLAY}, some applications can not change
+              the thread priority to that of the main thread. This catches that potential error
+              and tries to set a lower priority.
+             */
+            targetThreadPriority += Process.THREAD_PRIORITY_LESS_FAVORABLE;
+          }
+        }
+      } else {
+        originalThreadPriority = THREAD_PRIORITY_INVALID;
+      }
+
+      final LayoutState layoutState = super.get();
+
+      if (originalThreadPriority != THREAD_PRIORITY_INVALID) {
+        // Reset the running thread's priority after we're unblocked.
+        Process.setThreadPriority(runningThreadId, originalThreadPriority);
+      }
+
+      // Creating a LayoutState gives it a refcount of 1, but subsequent get() calls to this Future
+      // must increment the refcount to ensure we don't release the LayoutState too early.
+      if (isFirstGet.getAndSet(false)) {
+        return layoutState;
+      }
+      return layoutState.acquireRef();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      LayoutStateFuture that = (LayoutStateFuture) o;
+
+      if (widthSpec != that.widthSpec) {
+        return false;
+      }
+      if (heightSpec != that.heightSpec) {
+        return false;
+      }
+      if (diffingEnabled != that.diffingEnabled) {
+        return false;
+      }
+      if (!context.equals(that.context)) {
+        return false;
+      }
+      if (root.getId() != that.root.getId()) {
+        // NOTE: We only care that the root id is the same since the root is shallow copied before
+        // it's passed to us and will never be the same object.
+        return false;
+      }
+      if (diffNode != null ? !diffNode.equals(that.diffNode) : that.diffNode != null) {
+        return false;
+      }
+      if (treeProps != null ? !treeProps.equals(that.treeProps) : that.treeProps != null) {
+        return false;
+      }
+      return extraAttribution != null ? extraAttribution.equals(that.extraAttribution)
+          : that.extraAttribution == null;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = context.hashCode();
+      result = 31 * result + root.getId();
+      result = 31 * result + widthSpec;
+      result = 31 * result + heightSpec;
+      result = 31 * result + (diffingEnabled ? 1 : 0);
+      result = 31 * result + (diffNode != null ? diffNode.hashCode() : 0);
+      result = 31 * result + (treeProps != null ? treeProps.hashCode() : 0);
+      result = 31 * result + (extraAttribution != null ? extraAttribution.hashCode() : 0);
+      return result;
     }
   }
 

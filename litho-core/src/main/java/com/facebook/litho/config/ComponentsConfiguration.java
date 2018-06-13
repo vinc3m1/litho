@@ -186,4 +186,7 @@ public class ComponentsConfiguration {
 
   /** Runtime Size for ArrayBatchAllocation Batch Size */
   public static int arrayBatchAllocationRuntimeSize = 200;
+
+  /** Share a single LayoutStateFuture between threads when calculating LayoutState */
+  public static boolean enableSingleLayout;
 }
