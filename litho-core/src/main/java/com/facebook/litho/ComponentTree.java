@@ -1974,6 +1974,17 @@ public class ComponentTree {
 
           final ComponentContext contextWithStateHandler;
 
+          Log.d("vmi", String.format("calculateLayoutState on thread %s "
+                  + "\n context:%s root:%d"
+                  + "\n w:%d h:%d diffing:%b node:%s treeProps:%s attr:%s",
+              Thread.currentThread().getName(),
+              context,
+              root.getId(),
+              View.MeasureSpec.getSize(widthSpec),
+              View.MeasureSpec.getSize(heightSpec),
+              diffingEnabled,
+              diffNode, treeProps, extraAttribution));
+
           synchronized (ComponentTree.this) {
             final KeyHandler keyHandler = (ComponentsConfiguration.useGlobalKeys
                 || ComponentsConfiguration.isDebugModeEnabled)

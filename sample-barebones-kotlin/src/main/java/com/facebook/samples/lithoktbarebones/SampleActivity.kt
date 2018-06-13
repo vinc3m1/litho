@@ -30,8 +30,8 @@ class SampleActivity : Activity() {
 
         lithoView.post {
             val recyclerBinder = RecyclerBinder.Builder()
-                    .initRangeSize(10)
-//                    .rangeRatio(4f)
+                    .initRangeSize(6)
+                    .rangeRatio(0f)
                     .layoutInfo(LinearLayoutInfo(this, OrientationHelper.VERTICAL, false))
                     .build(context)
 

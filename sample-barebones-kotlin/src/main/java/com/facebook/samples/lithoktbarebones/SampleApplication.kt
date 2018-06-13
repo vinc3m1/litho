@@ -13,6 +13,7 @@
 package com.facebook.samples.lithoktbarebones
 
 import android.app.Application
+import com.facebook.litho.config.ComponentsConfiguration
 import com.facebook.soloader.SoLoader
 
 class SampleApplication : Application() {
@@ -20,5 +21,7 @@ class SampleApplication : Application() {
         super.onCreate()
 
         SoLoader.init(this, false)
+
+        ComponentsConfiguration.enableSingleLayout = true
     }
 }

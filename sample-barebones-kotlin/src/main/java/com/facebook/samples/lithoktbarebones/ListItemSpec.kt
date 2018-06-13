@@ -35,7 +35,6 @@ object ListItemSpec {
       @Prop subtitle: String): Component {
     Log.d("vmi", "onCreateLayout for index $index on thread ${Thread.currentThread().name}")
     Thread.sleep(100)
-//    RuntimeException("vmi onCreateLayout for index $index on thread ${Thread.currentThread().name}").printStackTrace()
     return Column.create(c)
             .paddingDip(ALL, 16f)
             .backgroundColor(color)
