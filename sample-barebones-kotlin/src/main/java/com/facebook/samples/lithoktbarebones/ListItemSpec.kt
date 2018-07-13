@@ -12,15 +12,16 @@
 
 package com.facebook.samples.lithoktbarebones
 
-import com.facebook.yoga.YogaEdge.ALL
-
-import com.facebook.litho.Column
 import com.facebook.litho.Component
 import com.facebook.litho.ComponentContext
 import com.facebook.litho.annotations.LayoutSpec
 import com.facebook.litho.annotations.OnCreateLayout
 import com.facebook.litho.annotations.Prop
-import com.facebook.litho.widget.Text
+import com.facebook.yoga.YogaEdge.ALL
+import com.makeramen.litho.children
+import com.makeramen.litho.column
+import com.makeramen.litho.row
+import com.makeramen.litho.text
 
 @LayoutSpec
 object ListItemSpec {
@@ -30,16 +31,31 @@ object ListItemSpec {
       c: ComponentContext,
       @Prop color: Int,
       @Prop title: String,
-      @Prop subtitle: String): Component = Column.create(c)
-        .paddingDip(ALL, 16f)
-        .backgroundColor(color)
-        .child(
-            Text.create(c)
-                .text(title)
-                .textSizeSp(40f))
-        .child(
-            Text.create(c)
-                .text(subtitle)
-                .textSizeSp(20f))
-        .build()
+      @Prop subtitle: String): Component = column(c) {
+    paddingDip(ALL, 16f)
+    backgroundColor(color)
+    children {
+      text {
+        text(title)
+        textSizeSp(40f)
+      }
+      text {
+        text(subtitle)
+        textSizeSp(20f)
+      }
+      row {
+        touchExpansionDip(ALL, 10f)
+        children {
+          text {
+            text("left")
+            touchExpansionDip(ALL, 5f)
+          }
+          text {
+            text("right")
+            touchExpansionDip(ALL, 5f)
+          }
+        }
+      }
+    }
+  }.build()
 }
