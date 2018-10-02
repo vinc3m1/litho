@@ -86,7 +86,7 @@ class EventDispatcherUtils {
     sFocusChangedEvent.view = null;
   }
 
-  static void dispatchOnVisible(EventHandler<VisibleEvent> visibleHandler) {
+  static void dispatchOnVisible(EventHandler<VisibleEvent> visibleHandler, View view) {
     assertMainThread();
 
     boolean isTracing = ComponentsSystrace.isTracing();
@@ -98,7 +98,11 @@ class EventDispatcherUtils {
       sVisibleEvent = new VisibleEvent();
     }
 
+    sVisibleEvent.view = view;
+
     visibleHandler.dispatchEvent(sVisibleEvent);
+
+    sVisibleEvent.view = null;
 
     if (isTracing) {
       ComponentsSystrace.endSection();
@@ -136,14 +140,18 @@ class EventDispatcherUtils {
     fullImpressionHandler.dispatchEvent(sFullImpressionVisibleEvent);
   }
 
-  static void dispatchOnInvisible(EventHandler<InvisibleEvent> invisibleHandler) {
+  static void dispatchOnInvisible(EventHandler<InvisibleEvent> invisibleHandler, View view) {
     assertMainThread();
 
     if (sInvisibleEvent == null) {
       sInvisibleEvent = new InvisibleEvent();
     }
 
+    sInvisibleEvent.view = view;
+
     invisibleHandler.dispatchEvent(sInvisibleEvent);
+
+    sInvisibleEvent.view = null;
   }
 
   static boolean dispatchOnLongClick(EventHandler<LongClickEvent> longClickHandler, View view) {
