@@ -1268,9 +1268,8 @@ public class RecyclerBinder
               + Arrays.toString(names));
     }
 
-    for (int i = 0, size = renderInfos.size(); i < size; i++) {
-
-      synchronized (this) {
+    synchronized (this) {
+      for (int i = 0, size = renderInfos.size(); i < size; i++) {
         final ComponentTreeHolder holder = mComponentTreeHolders.get(position + i);
         final RenderInfo newRenderInfo = renderInfos.get(i);
 
