@@ -962,6 +962,32 @@ public class RecyclerBinderTest {
   }
 
   @Test
+  public void testMoveItemRangeOutsideFromRange() {
+    final List<ComponentRenderInfo> components = prepareLoadedBinder();
+    final int itemCount = 10;
+    mRecyclerBinder.moveItemRange(0, 100 - itemCount, itemCount);
+    mRecyclerBinder.notifyChangeSetComplete(true, NO_OP_CHANGE_SET_COMPLETE_CALLBACK);
+
+    for (int i = 0; i < itemCount; i++) {
+      final TestComponentTreeHolder movedHolder =
+          mHoldersForComponents.get(components.get(i).getComponent());
+      assertThat(movedHolder.isTreeValid()).isFalse();
+      assertThat(movedHolder.mLayoutAsyncCalled).isFalse();
+      assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+      assertThat(movedHolder.mDidAcquireStateHandler).isTrue();
+    }
+
+    final int rangeTotal = (int) (RANGE_SIZE + (RANGE_RATIO * RANGE_SIZE));
+    final TestComponentTreeHolder holderMovedIntoRange =
+        mHoldersForComponents.get(
+            components.get(Math.max(rangeTotal, itemCount) + 1).getComponent());
+
+    assertThat(holderMovedIntoRange.isTreeValid()).isTrue();
+    assertThat(holderMovedIntoRange.mLayoutAsyncCalled).isTrue();
+    assertThat(holderMovedIntoRange.mLayoutSyncCalled).isFalse();
+  }
+
+  @Test
   public void testMoveItemInsideRange() {
     final List<ComponentRenderInfo> components = prepareLoadedBinder();
     mRecyclerBinder.moveItem(99, 4);
@@ -984,6 +1010,41 @@ public class RecyclerBinderTest {
   }
 
   @Test
+  public void testMoveItemRangeInsideRange() {
+    final List<ComponentRenderInfo> components = prepareLoadedBinder();
+    mRecyclerBinder.moveItemRange(97, 4, 3);
+    mRecyclerBinder.notifyChangeSetComplete(true, NO_OP_CHANGE_SET_COMPLETE_CALLBACK);
+
+    TestComponentTreeHolder movedHolder =
+        mHoldersForComponents.get(components.get(97).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+    movedHolder = mHoldersForComponents.get(components.get(98).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+    movedHolder = mHoldersForComponents.get(components.get(99).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+    final int rangeTotal = (int) (RANGE_SIZE + (RANGE_RATIO * RANGE_SIZE));
+
+    TestComponentTreeHolder holderMovedOutsideRange =
+        mHoldersForComponents.get(components.get(rangeTotal - 2).getComponent());
+
+    assertThat(holderMovedOutsideRange.isTreeValid()).isFalse();
+    assertThat(holderMovedOutsideRange.mLayoutAsyncCalled).isFalse();
+    assertThat(holderMovedOutsideRange.mLayoutSyncCalled).isFalse();
+  }
+
+  @Test
   public void testMoveItemInsideVisibleRange() {
     final List<ComponentRenderInfo> components = prepareLoadedBinder();
     mRecyclerBinder.moveItem(99, 2);
@@ -996,6 +1057,43 @@ public class RecyclerBinderTest {
     assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
     assertThat(movedHolder.mLayoutSyncCalled).isFalse();
     assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+    final int rangeTotal = (int) (RANGE_SIZE + (RANGE_RATIO * RANGE_SIZE));
+
+    final TestComponentTreeHolder holderMovedOutsideRange =
+        mHoldersForComponents.get(components.get(rangeTotal).getComponent());
+
+    assertThat(holderMovedOutsideRange.isTreeValid()).isFalse();
+    assertThat(holderMovedOutsideRange.mLayoutAsyncCalled).isFalse();
+    assertThat(holderMovedOutsideRange.mLayoutSyncCalled).isFalse();
+    assertThat(holderMovedOutsideRange.mDidAcquireStateHandler).isTrue();
+  }
+
+  @Test
+  public void testMoveItemRangeInsideVisibleRange() {
+    final List<ComponentRenderInfo> components = prepareLoadedBinder();
+    mRecyclerBinder.moveItemRange(97, 2, 3);
+    mRecyclerBinder.notifyChangeSetComplete(true, NO_OP_CHANGE_SET_COMPLETE_CALLBACK);
+
+    TestComponentTreeHolder movedHolder =
+        mHoldersForComponents.get(components.get(97).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+    movedHolder = mHoldersForComponents.get(components.get(98).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+    movedHolder = mHoldersForComponents.get(components.get(99).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isFalse();
+
+
     final int rangeTotal = (int) (RANGE_SIZE + (RANGE_RATIO * RANGE_SIZE));
 
     final TestComponentTreeHolder holderMovedOutsideRange =
@@ -1031,6 +1129,57 @@ public class RecyclerBinderTest {
   }
 
   @Test
+  public void testMoveItemRangePartiallyOutsideRange() {
+    final List<ComponentRenderInfo> components = prepareLoadedBinder();
+    mRecyclerBinder.moveItemRange(2, 9, 3);
+    mRecyclerBinder.notifyChangeSetComplete(true, NO_OP_CHANGE_SET_COMPLETE_CALLBACK);
+
+    TestComponentTreeHolder movedHolder =
+        mHoldersForComponents.get(components.get(2).getComponent());
+    assertThat(movedHolder.isTreeValid()).isTrue();
+    assertThat(movedHolder.mLayoutAsyncCalled).isTrue();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isTrue();
+
+    movedHolder = mHoldersForComponents.get(components.get(3).getComponent());
+    assertThat(movedHolder.isTreeValid()).isFalse();
+    assertThat(movedHolder.mLayoutAsyncCalled).isFalse();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isTrue();
+
+    movedHolder = mHoldersForComponents.get(components.get(4).getComponent());
+    assertThat(movedHolder.isTreeValid()).isFalse();
+    assertThat(movedHolder.mLayoutAsyncCalled).isFalse();
+    assertThat(movedHolder.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolder.mDidAcquireStateHandler).isTrue();
+
+    final int rangeTotal = (int) (RANGE_SIZE + (RANGE_RATIO * RANGE_SIZE));
+    TestComponentTreeHolder holderMovedInsideRange =
+        mHoldersForComponents.get(components.get(rangeTotal + 1).getComponent());
+
+    assertThat(holderMovedInsideRange.isTreeValid()).isTrue();
+    assertThat(holderMovedInsideRange.mLayoutAsyncCalled).isTrue();
+    assertThat(holderMovedInsideRange.mLayoutSyncCalled).isFalse();
+    assertThat(holderMovedInsideRange.mDidAcquireStateHandler).isFalse();
+
+    holderMovedInsideRange =
+        mHoldersForComponents.get(components.get(rangeTotal + 2).getComponent());
+
+    assertThat(holderMovedInsideRange.isTreeValid()).isTrue();
+    assertThat(holderMovedInsideRange.mLayoutAsyncCalled).isTrue();
+    assertThat(holderMovedInsideRange.mLayoutSyncCalled).isFalse();
+    assertThat(holderMovedInsideRange.mDidAcquireStateHandler).isFalse();
+
+    holderMovedInsideRange =
+        mHoldersForComponents.get(components.get(rangeTotal + 3).getComponent());
+
+    assertThat(holderMovedInsideRange.isTreeValid()).isFalse();
+    assertThat(holderMovedInsideRange.mLayoutAsyncCalled).isFalse();
+    assertThat(holderMovedInsideRange.mLayoutSyncCalled).isFalse();
+    assertThat(holderMovedInsideRange.mDidAcquireStateHandler).isFalse();
+  }
+
+  @Test
   public void testMoveWithinRange() {
     final List<ComponentRenderInfo> components = prepareLoadedBinder();
 
@@ -1059,6 +1208,48 @@ public class RecyclerBinderTest {
     assertThat(movedHolderTwo.mLayoutAsyncCalled).isFalse();
     assertThat(movedHolderTwo.mLayoutSyncCalled).isFalse();
     assertThat(movedHolderTwo.mDidAcquireStateHandler).isFalse();
+  }
+
+  @Test
+  public void testMoveRangeWithinRange() {
+    final List<ComponentRenderInfo> components = prepareLoadedBinder();
+
+    final TestComponentTreeHolder movedHolderOne =
+        mHoldersForComponents.get(components.get(0).getComponent());
+    final TestComponentTreeHolder movedHolderTwo =
+        mHoldersForComponents.get(components.get(1).getComponent());
+    final TestComponentTreeHolder movedHolderThree =
+        mHoldersForComponents.get(components.get(2).getComponent());
+
+    movedHolderOne.mLayoutSyncCalled = false;
+    movedHolderOne.mLayoutAsyncCalled = false;
+    movedHolderOne.mDidAcquireStateHandler = false;
+
+    movedHolderTwo.mLayoutSyncCalled = false;
+    movedHolderTwo.mLayoutAsyncCalled = false;
+    movedHolderTwo.mDidAcquireStateHandler = false;
+
+    movedHolderThree.mLayoutSyncCalled = false;
+    movedHolderThree.mLayoutAsyncCalled = false;
+    movedHolderThree.mDidAcquireStateHandler = false;
+
+    mRecyclerBinder.moveItemRange(0, 1, 2);
+    mRecyclerBinder.notifyChangeSetComplete(true, NO_OP_CHANGE_SET_COMPLETE_CALLBACK);
+
+    assertThat(movedHolderOne.isTreeValid()).isTrue();
+    assertThat(movedHolderOne.mLayoutAsyncCalled).isFalse();
+    assertThat(movedHolderOne.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolderOne.mDidAcquireStateHandler).isFalse();
+
+    assertThat(movedHolderTwo.isTreeValid()).isTrue();
+    assertThat(movedHolderTwo.mLayoutAsyncCalled).isFalse();
+    assertThat(movedHolderTwo.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolderTwo.mDidAcquireStateHandler).isFalse();
+
+    assertThat(movedHolderThree.isTreeValid()).isTrue();
+    assertThat(movedHolderThree.mLayoutAsyncCalled).isFalse();
+    assertThat(movedHolderThree.mLayoutSyncCalled).isFalse();
+    assertThat(movedHolderThree.mDidAcquireStateHandler).isFalse();
   }
 
   @Test

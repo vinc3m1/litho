@@ -144,17 +144,17 @@ final class ViewportManager {
   }
 
   @UiThread
-  boolean moveAffectsVisibleRange(int fromPosition, int toPosition, int viewportCount) {
+  boolean moveAffectsVisibleRange(int fromPosition, int toPosition, int size, int viewportCount) {
     if (shouldUpdate() || viewportCount == -1) {
       return true;
     }
 
     final boolean isNewPositionInVisibleRange =
-        toPosition >= mCurrentFirstVisiblePosition
+        toPosition + size >= mCurrentFirstVisiblePosition
             && toPosition <= mCurrentFirstVisiblePosition + viewportCount - 1;
 
     final boolean isOldPositionInVisibleRange =
-        fromPosition >= mCurrentFirstVisiblePosition
+        fromPosition + size >= mCurrentFirstVisiblePosition
             && fromPosition <= mCurrentFirstVisiblePosition + viewportCount - 1;
 
     return isNewPositionInVisibleRange || isOldPositionInVisibleRange;

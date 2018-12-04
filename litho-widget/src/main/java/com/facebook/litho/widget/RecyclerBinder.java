@@ -1263,33 +1263,60 @@ public class RecyclerBinder
    */
   @UiThread
   public final void moveItem(int fromPosition, int toPosition) {
+    moveItemRange(fromPosition, toPosition, 1);
+  }
+
+  /**
+   * Moves a range of itemCount items from fromPosition to toPosition. If the new position of the
+   * item is within the currently visible range, a layout is calculated immediately on the UI
+   * Thread.
+   */
+  @UiThread
+  public final void moveItemRange(int fromPosition, int toPosition, int itemCount) {
     ThreadUtils.assertMainThread();
 
     if (SectionsDebug.ENABLED) {
       Log.d(
-          SectionsDebug.TAG, "(" + hashCode() + ") moveItem " + fromPosition + " to " + toPosition);
+          SectionsDebug.TAG, "(" + hashCode() + ") moveItemRange "
+              + fromPosition + " to " + toPosition + ", count " + itemCount);
     }
 
-    final ComponentTreeHolder holder;
-    final boolean isNewPositionInRange;
+    final ArrayList<ComponentTreeHolder> holders = new ArrayList<>(itemCount);
     final int mRangeSize = mRange != null ? mRange.estimatedViewportCount : -1;
     synchronized (this) {
-      holder = mComponentTreeHolders.remove(fromPosition);
-      mComponentTreeHolders.add(toPosition, holder);
+      for (int i = 0; i < itemCount; i++) {
+        holders.add(mComponentTreeHolders.remove(fromPosition));
+      }
+      mComponentTreeHolders.addAll(toPosition, holders);
 
-      isNewPositionInRange = mRangeSize > 0 &&
-          toPosition >= mCurrentFirstVisiblePosition - (mRangeSize * mRangeRatio) &&
-          toPosition <= mCurrentFirstVisiblePosition + mRangeSize + (mRangeSize * mRangeRatio);
+      if (mRangeSize > 0) {
+        final float rangeStart = mCurrentFirstVisiblePosition - (mRangeSize * mRangeRatio);
+        final float rangeEnd =
+            mCurrentFirstVisiblePosition + mRangeSize + (mRangeSize * mRangeRatio);
+        final Iterator<ComponentTreeHolder> iterator = holders.iterator();
+        int i = 0;
+        while (iterator.hasNext()) {
+          iterator.next();
+          if (toPosition + i >= rangeStart && toPosition + i <= rangeEnd) {
+            iterator.remove();
+          }
+          i++;
+        }
+      }
     }
-    final boolean isTreeValid = holder.isTreeValid();
+    for (ComponentTreeHolder holder: holders) {
+      if (holder.isTreeValid()) {
+        // Only do this for holders with valid trees that are out of range.
+        holder.acquireStateAndReleaseTree();
+      }
+    }
 
-    if (isTreeValid && !isNewPositionInRange) {
-      holder.acquireStateAndReleaseTree();
+    for (int i = 0; i < itemCount; i++) {
+      mInternalAdapter.notifyItemMoved(fromPosition + i, toPosition + i);
     }
-    mInternalAdapter.notifyItemMoved(fromPosition, toPosition);
 
     mViewportManager.setShouldUpdate(
-        mViewportManager.moveAffectsVisibleRange(fromPosition, toPosition, mRangeSize));
+        mViewportManager.moveAffectsVisibleRange(fromPosition, toPosition, itemCount, mRangeSize));
   }
 
   /**

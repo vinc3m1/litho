@@ -175,13 +175,17 @@ public class ViewportManagerTest {
   public void testMoveAffectsVisibleRange() {
     ViewportManager viewportManager = getViewportManager(5, 10);
     // either is within viewport
-    assertThat(viewportManager.moveAffectsVisibleRange(12, 9, 6)).isTrue();
-    assertThat(viewportManager.moveAffectsVisibleRange(9, 12, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(12, 9, 1, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(12, 9, 3, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(9, 12, 1, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(9, 12, 3, 6)).isTrue();
     // both is within viewport
-    assertThat(viewportManager.moveAffectsVisibleRange(6, 7, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(6, 7, 1, 6)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(4, 9, 3, 6)).isTrue();
     // neither is within viewport
-    assertThat(viewportManager.moveAffectsVisibleRange(11, 13, 6)).isFalse();
-    assertThat(viewportManager.moveAffectsVisibleRange(1, 3, 6)).isFalse();
+    assertThat(viewportManager.moveAffectsVisibleRange(11, 13, 1, 6)).isFalse();
+    assertThat(viewportManager.moveAffectsVisibleRange(1, 3, 1, 6)).isFalse();
+    assertThat(viewportManager.moveAffectsVisibleRange(1, 11, 3, 6)).isFalse();
   }
 
   @Test
@@ -207,14 +211,14 @@ public class ViewportManagerTest {
 
     assertThat(viewportManager.insertAffectsVisibleRange(6, 2, -1)).isTrue();
     assertThat(viewportManager.updateAffectsVisibleRange(6, 2)).isTrue();
-    assertThat(viewportManager.moveAffectsVisibleRange(6, 2, 10)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(6, 2, 1, 10)).isTrue();
     assertThat(viewportManager.removeAffectsVisibleRange(6, 2)).isTrue();
 
     viewportManager = getViewportManager(1, -1);
 
     assertThat(viewportManager.insertAffectsVisibleRange(6, 2, 10)).isTrue();
     assertThat(viewportManager.updateAffectsVisibleRange(6, 2)).isTrue();
-    assertThat(viewportManager.moveAffectsVisibleRange(6, 2, -1)).isTrue();
+    assertThat(viewportManager.moveAffectsVisibleRange(6, 2, 1, -1)).isTrue();
     assertThat(viewportManager.removeAffectsVisibleRange(6, 2)).isTrue();
   }
 
