@@ -12,14 +12,14 @@
 
 package com.facebook.samples.lithoktbarebones
 
+import android.view.View
+import com.facebook.litho.ClickEvent
 import com.facebook.yoga.YogaEdge.ALL
 
 import com.facebook.litho.Column
 import com.facebook.litho.Component
 import com.facebook.litho.ComponentContext
-import com.facebook.litho.annotations.LayoutSpec
-import com.facebook.litho.annotations.OnCreateLayout
-import com.facebook.litho.annotations.Prop
+import com.facebook.litho.annotations.*
 import com.facebook.litho.widget.Text
 
 @LayoutSpec
@@ -31,6 +31,7 @@ object ListItemSpec {
       @Prop color: Int,
       @Prop title: String,
       @Prop subtitle: String): Component = Column.create(c)
+        .clickHandler(ListItem.onClick(c))
         .paddingDip(ALL, 16f)
         .backgroundColor(color)
         .child(
@@ -42,4 +43,15 @@ object ListItemSpec {
                 .text(subtitle)
                 .textSizeSp(20f))
         .build()
+
+  @OnEvent(ClickEvent::class)
+  fun onClick(
+      c: ComponentContext,
+      @FromEvent view: View,
+      @Prop number: Int,
+      @Prop clickListener: ItemClickListener ) = clickListener.onItemClicked(number)
+}
+
+interface ItemClickListener {
+  fun onItemClicked(number: Int)
 }

@@ -2575,7 +2575,7 @@ public class RecyclerBinder
     // ItemPrefetching feature of RecyclerView clashes with RecyclerBinder's compute range
     // optimization and in certain scenarios (like sticky header) it might reset ComponentTree of
     // LithoView while it is still on screen making it render blank or zero height.
-    layoutManager.setItemPrefetchEnabled(false);
+    layoutManager.setItemPrefetchEnabled(true);
 
     view.setLayoutManager(layoutManager);
     view.setAdapter(mInternalAdapter);
@@ -3226,6 +3226,7 @@ public class RecyclerBinder
     @Override
     @GuardedBy("RecyclerBinder.this")
     public void onBindViewHolder(BaseViewHolder holder, int position) {
+      Log.d("vmi","onBindViewHolder: " + position);
       final int normalizedPosition = getNormalizedPosition(position);
 
       // We can ignore the synchronization here. We'll only add to this from the UiThread.

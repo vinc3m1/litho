@@ -15,15 +15,19 @@ package com.facebook.samples.lithoktbarebones
 import android.app.Activity
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.recyclerview.widget.OrientationHelper
 import com.facebook.litho.ComponentContext
 import com.facebook.litho.LithoView
-import com.facebook.litho.widget.ComponentRenderInfo
-import com.facebook.litho.widget.LinearLayoutInfo
-import com.facebook.litho.widget.Recycler
-import com.facebook.litho.widget.RecyclerBinder
+import com.facebook.litho.widget.*
 
 class SampleActivity : Activity() {
+
+    private val items = ArrayList<Int>()
+
+    private val handler = Handler(Looper.getMainLooper())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -33,25 +37,48 @@ class SampleActivity : Activity() {
                 .layoutInfo(LinearLayoutInfo(this, OrientationHelper.VERTICAL, false))
                 .build(context)
 
-        val component = Recycler.create(context).binder(recyclerBinder).build()
+        val component = Recycler.create(context)
+                .binder(recyclerBinder)
+                .snapHelper(EndSnapHelper())
+                .itemAnimator(null)
+                .build()
 
-        addContent(recyclerBinder, context)
+        val clickListener = object : ItemClickListener {
+            override fun onItemClicked(number: Int) {
+                val index = items.indexOf(number)
+                if (index >= 0) {
+                    items.removeAt(index)
+                    recyclerBinder.removeItemAt(index)
+                    handler.postDelayed({
+                      items.add(index, number)
+                      recyclerBinder.insertItemAt(index, createRenderInfo(number, context, this))
+                    }, 100)
+                }
+            }
+        }
+
+        addContent(recyclerBinder, context, clickListener)
 
         setContentView(LithoView.create(context, component))
     }
 
-    private fun addContent(recyclerBinder: RecyclerBinder, context: ComponentContext) {
-        for (i in 0 until 31) {
+    private fun addContent(recyclerBinder: RecyclerBinder, context: ComponentContext, clickListener: ItemClickListener) {
+        for (i in 0 until 100) {
+            items.add(i)
             recyclerBinder.insertItemAt(
                     i,
-                    ComponentRenderInfo.create()
-                            .component(
-                                    ListItem.create(context)
-                                            .color(if (i % 2 == 0) Color.WHITE else Color.LTGRAY)
-                                            .title("Hello, world!")
-                                            .subtitle("Litho tutorial")
-                                            .build())
-                            .build())
-        }
+                createRenderInfo(i, context, clickListener)) }
     }
+
+    private fun createRenderInfo(number: Int, context: ComponentContext, clickListener: ItemClickListener) =
+         ComponentRenderInfo.create()
+            .component(
+                ListItem.create(context)
+                    .color(if (number % 2 == 0) Color.WHITE else Color.LTGRAY)
+                    .number(number)
+                    .clickListener(clickListener)
+                    .title("$number Hello, world!")
+                    .subtitle("Litho tutorial")
+                    .build())
+            .build()
 }
