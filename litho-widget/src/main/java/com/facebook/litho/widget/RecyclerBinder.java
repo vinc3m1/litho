@@ -114,6 +114,7 @@ public class RecyclerBinder
   private final @Nullable LithoViewFactory mLithoViewFactory;
   private final ComponentTreeHolderFactory mComponentTreeHolderFactory;
   private final Handler mMainThreadHandler = new Handler(Looper.getMainLooper());
+  private final int mInitRangeSize;
   private final float mRangeRatio;
   private final AtomicBoolean mIsMeasured = new AtomicBoolean(false);
   private final AtomicBoolean mRequiresRemeasure = new AtomicBoolean(false);
@@ -365,6 +366,7 @@ public class RecyclerBinder
   public static class Builder {
     public static final float DEFAULT_RANGE_RATIO = 4f;
 
+    private int initRangeSize = UNSET;
     private float rangeRatio = DEFAULT_RANGE_RATIO;
     private LayoutInfo layoutInfo;
     private @Nullable LayoutHandlerFactory layoutHandlerFactory;
@@ -393,6 +395,14 @@ public class RecyclerBinder
     private boolean splitLayoutForMeasureAndRangeEstimation =
         ComponentsConfiguration.splitLayoutForMeasureAndRangeEstimation;
     private @Nullable StickyHeaderControllerFactory stickyHeaderControllerFactory;
+
+
+    /** Set a hardcoded initial range to avoid measuring the first component on the main thread. */
+    public Builder initRangeSize(int initRangeSize) {
+      this.initRangeSize = initRangeSize;
+      return this;
+
+    }
 
     /**
      * @param rangeRatio specifies how big a range this binder should try to compute. The range is
@@ -700,6 +710,7 @@ public class RecyclerBinder
             ? builder.overrideInternalAdapter
             : new InternalAdapter();
 
+    mInitRangeSize = builder.initRangeSize;
     mRangeRatio =
         ComponentsConfiguration.defaultRangeRatio >= 0
             ? Math.min(builder.rangeRatio, ComponentsConfiguration.defaultRangeRatio)
@@ -2387,17 +2398,24 @@ public class RecyclerBinder
 
     ComponentsSystrace.beginSection("initRange");
     try {
-      final Size size = new Size();
-      holder.computeLayoutSync(mComponentContext, childWidthSpec, childHeightSpec, size);
+      if (mInitRangeSize > 0 && ThreadUtils.isMainThread()) {
+        mSizeForMeasure = scrollDirection == HORIZONTAL
+            ? new Size(width / mInitRangeSize, height)
+            : new Size(width, height / mInitRangeSize);
+        mEstimatedViewportCount = mInitRangeSize;
+      } else {
+        final Size size = new Size();
+        holder.computeLayoutSync(mComponentContext, childWidthSpec, childHeightSpec, size);
 
-      final int rangeSize =
-          Math.max(mLayoutInfo.approximateRangeSize(size.width, size.height, width, height), 1);
+        final int rangeSize =
+            Math.max(mLayoutInfo.approximateRangeSize(size.width, size.height, width, height), 1);
 
-      mSizeForMeasure = size;
-      mEstimatedViewportCount =
-          ComponentsConfiguration.fixedRangeSize >= 0
-              ? ComponentsConfiguration.fixedRangeSize
-              : rangeSize;
+        mSizeForMeasure = size;
+        mEstimatedViewportCount =
+            ComponentsConfiguration.fixedRangeSize >= 0
+                ? ComponentsConfiguration.fixedRangeSize
+                : rangeSize;
+      }
     } finally {
       ComponentsSystrace.endSection();
     }
