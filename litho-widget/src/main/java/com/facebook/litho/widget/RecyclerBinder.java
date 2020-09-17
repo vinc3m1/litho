@@ -3155,6 +3155,10 @@ public class RecyclerBinder
   }
 
   private void computeRange(int firstVisible, int lastVisible) {
+    computeRange(firstVisible, lastVisible, mRangeTraverser);
+  }
+
+  private void computeRange(int firstVisible, int lastVisible, RecyclerRangeTraverser traverser) {
     final int rangeSize;
     final int rangeStart;
     final int rangeEnd;
@@ -3179,7 +3183,7 @@ public class RecyclerBinder
       }
     }
 
-    mRangeTraverser.traverse(
+    traverser.traverse(
         0,
         treeHoldersSize,
         firstVisible,
@@ -3523,6 +3527,19 @@ public class RecyclerBinder
         final int childrenWidthSpec = getActualChildrenWidthSpec(componentTreeHolder);
         final int childrenHeightSpec = getActualChildrenHeightSpec(componentTreeHolder);
         if (!componentTreeHolder.isTreeValidForSizeSpecs(childrenWidthSpec, childrenHeightSpec)) {
+          if (ComponentsConfiguration.computeRangeOnSyncLayout
+              && mCurrentFirstVisiblePosition != RecyclerView.NO_POSITION
+              && mCurrentLastVisiblePosition != RecyclerView.NO_POSITION) {
+            // Get the last known visible range if available.
+            final int range = mCurrentLastVisiblePosition - mCurrentFirstVisiblePosition;
+
+            if (position > mCurrentLastVisiblePosition) {
+              computeRange(position, position + range, RecyclerRangeTraverser.FORWARD_TRAVERSER);
+            } else if (position < mCurrentFirstVisiblePosition) {
+              computeRange(position - range, position, RecyclerRangeTraverser.BACKWARD_TRAVERSER);
+            }
+          }
+
           final Size size = new Size();
           componentTreeHolder.computeLayoutSync(
               mComponentContext, childrenWidthSpec, childrenHeightSpec, size);
